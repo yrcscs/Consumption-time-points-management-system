@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html class="loading" lang="en" data-textdirection="ltr">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">
+  <meta name="author" content="PIXINVENT">
+  <title>管理后台</title>
+  <link rel="stylesheet" type="text/css" href="static/app-assets/css/vendors.css">
+  <link rel="stylesheet" type="text/css" href="static/app-assets/css/vertical-menu.css">
+  <link rel="stylesheet" type="text/css" href="static/app-assets/css/bootstrap-extended.css">
+  <style>
+    .form-group {
+      position: relative;
+      margin-right: 15px;
+    }
+    .invalid-feedback {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      display: none;
+    }
+    .form-control.is-invalid + .invalid-feedback {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="content-wrapper">
+    <div class="content-header ">
+      <div class="content-header-left mb-2 clearfix">
+        <h3 class="content-header-title mb-0">房间管理</h3>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-content">
+          <div class="card-body">
+              <div class="searchbox">
+                  <form class="form-inline" id="create-room-form">
+                      <div class="form-group">
+                          <input type="text" class="form-control" id="room-name" placeholder="房间名" required>
+                          <div class="invalid-feedback">房间名不能为空</div>
+                      </div>
+                      <div class="form-group">
+                          <input type="number" class="form-control" id="room-coefficient" placeholder="积分系数（整数）" min="0" step="1" required>
+                          <div class="invalid-feedback">积分系数不能为空</div>
+                      </div>
+                      <div class="form-group">
+                          <button type="submit" class="btn btn-primary">新建房间</button>
+                      </div>
+                  </form>
+              </div>
+  
+              <div class="funcbtn clearfix"></div>
+              <div class="tablebox1">
+                  <table class="table">
+                      <thead>
+                          <tr>
+                              <th>id</th>
+                              <th>名称</th>
+                              <th>系数</th>
+                              <th>操作</th>
+                          </tr>
+                      </thead>
+                      <tbody id="room-table-body">
+                          <!-- 动态生成的表格行将插入到这里 -->
+                      </tbody>
+                  </table>
+              </div>
+              <div class="pagination">
+                  <button id="prevPage" class="btn btn-secondary" onclick="prevPage()">上一页</button>
+                  <span id="pageInfo"></span>
+                  <button id="nextPage" class="btn btn-secondary" onclick="nextPage()">下一页</button>
+              </div>
+          </div>
+      </div>
+  </div>
+  </div>
+
+  <script>
+    document.getElementById('room-coefficient').addEventListener('input', function (e) {
+      const value = e.target.value;
+      if (value && (value < 0 || !Number.isInteger(Number(value)))) {
+        e.target.setCustomValidity('积分系数必须是大于等于0的整数');
+      } else {
+        e.target.setCustomValidity('');
+      }
+    });
+  
+    document.getElementById('create-room-form').addEventListener('submit', function (e) {
+      const form = e.target;
+      if (!form.checkValidity()) {
+        e.preventDefault();
+        e.stopPropagation();
+        form.classList.add('was-validated');
+      }
+    });
+  </script>
+<!-- 编辑房间模态框 -->
+<div class="modal fade" id="editRoomModal" tabindex="-1" role="dialog" aria-labelledby="editRoomModalLabel"
+  aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editRoomModalLabel">编辑房间</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="editRoomForm">
+          <div class="form-group">
+            <label for="roomName">房间名称</label>
+            <input type="text" class="form-control" id="roomName" required>
+          </div>
+          <div class="form-group">
+            <label for="roomCoefficient">系数</label>
+            <input type="number" class="form-control" id="roomCoefficient" min="0" step="1" required>
+          </div>
+          <input type="hidden" id="roomId">
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+        <button type="button" class="btn btn-primary" id="saveRoomChanges">保存更改</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+  document.getElementById('roomCoefficient').addEventListener('input', function (e) {
+    const value = e.target.value;
+    if (value && (value < 0 || !Number.isInteger(Number(value)))) {
+      e.target.setCustomValidity('积分系数必须是大于等于0的整数');
+    } else {
+      e.target.setCustomValidity('');
+    }
+  });
+
+  document.getElementById('saveRoomChanges').addEventListener('click', function () {
+    const form = document.getElementById('editRoomForm');
+    if (form.checkValidity()) {
+      // 提交表单或执行保存操作
+      console.log('表单有效，执行保存操作');
+      // 这里可以添加实际的保存逻辑
+    } else {
+      form.reportValidity();
+    }
+  });
+</script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // 使用事件委托监听编辑按钮点击事件
+      document.addEventListener('click', function (event) {
+        if (event.target && event.target.id.startsWith('edit-')) {
+          event.preventDefault();
+          const roomId = event.target.id.split('-')[1];
+          const roomName = event.target.dataset.name;
+          const roomCoefficient = event.target.dataset.coefficient;
+
+          // 填充模态框中的表单
+          document.getElementById('roomId').value = roomId;
+          document.getElementById('roomName').value = roomName;
+          document.getElementById('roomCoefficient').value = roomCoefficient;
+
+          // 显示模态框
+          $('#editRoomModal').modal('show');
+        }
+      });
+
+      // 监听保存按钮点击事件
+      document.getElementById('saveRoomChanges').addEventListener('click', function () {
+        const roomId = document.getElementById('roomId').value;
+        const roomName = document.getElementById('roomName').value;
+        const roomCoefficient = document.getElementById('roomCoefficient').value;
+                                    // 校验 productspoints 是否为非负整数
+                                    if (!Number.isInteger(Number(roomCoefficient)) || Number(roomCoefficient) < 0) {
+            alert('积分系数必须是大于等于0的整数');
+            return; // 阻止发送更新请求
+        }
+
+
+        // 发送更新请求到服务器
+        fetch(`api/rooms/${roomId}`, {  // 修改 URL 为 /rooms/${roomId}
+          method: 'PUT',  // 修改方法为 PUT
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: roomName,
+            coefficient: roomCoefficient
+          })
+        })
+          .then(response => response.json())
+          .then(data => {
+            if (data.message === 'Room updated') {
+              // 更新成功，刷新页面或更新页面内容
+              location.reload();
+            } else {
+              // 处理错误
+              alert('更新失败: ' + data.message);
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+          });
+
+        // 关闭模态框
+        $('#editRoomModal').modal('hide');
+      });
+    });
+  </script>
+  <script>
+        document.getElementById('create-room-form').addEventListener('submit', function(event) {
+      event.preventDefault(); // 阻止表单的默认提交行为
+
+      // 获取输入框的值
+      const roomName = document.getElementById('room-name').value.trim();
+      const roomCoefficient = document.getElementById('room-coefficient').value.trim();
+
+      // 获取输入框元素
+      const roomNameInput = document.getElementById('room-name');
+      const roomCoefficientInput = document.getElementById('room-coefficient');
+
+      // 初始化验证状态
+      let isValid = true;
+
+      // 验证房间名是否为空
+      if (!roomName) {
+        roomNameInput.classList.add('is-invalid');
+        isValid = false;
+      } else {
+        roomNameInput.classList.remove('is-invalid');
+      }
+
+      // 验证积分系数是否为空
+      if (!roomCoefficient) {
+        roomCoefficientInput.classList.add('is-invalid');
+        isValid = false;
+      } else {
+        roomCoefficientInput.classList.remove('is-invalid');
+      }
+
+                            // 校验 productspoints 是否为非负整数
+        if (!Number.isInteger(Number(roomCoefficient)) || Number(roomCoefficient) < 0) {
+            alert('积分系数必须是大于等于0的整数');
+            return; // 阻止发送更新请求
+        }
+
+
+      // 如果验证未通过，阻止表单提交
+      if (!isValid) {
+        return;
+      }
+
+      // 发送请求
+      fetch('/api/rooms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: roomName,
+          coefficient: roomCoefficient
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Success:', data);
+        // 可以在这里添加代码来更新页面，比如清空表单或显示成功消息
+        location.reload();
+      })
+      .catch((error) => {
+        console.error('Error:', error);
+        // 可以在这里添加代码来显示错误消息
+      });
+    });
+  </script>
+
+  <script>
+document.addEventListener('DOMContentLoaded', function () {
+    const itemsPerPage = 10;
+    let currentPage = 1;
+    let totalItems = 0;
+    let rooms = [];
+
+    // 页面加载时获取所有房间数据
+    fetchRooms();
+
+    // 定义获取房间数据的函数
+    function fetchRooms() {
+        fetch('/api/rooms')
+            .then(response => response.json())
+            .then(data => {
+                rooms = data;
+                totalItems = rooms.length;
+                currentPage = 1;
+                renderTable();
+            })
+            .catch(error => console.error('Error fetching room data:', error));
+    }
+
+    // 定义渲染表格的函数
+    function renderTable() {
+        const tableBody = document.getElementById('room-table-body');
+        tableBody.innerHTML = ''; // 清空表格内容
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const pageItems = rooms.slice(start, end);
+
+        pageItems.forEach(room => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${room.id}</td>
+                <td>${room.name}</td>
+                <td>${room.coefficient}</td>
+                <td>
+                    <button type="button" class="btn btn-info" id="edit-${room.id}" data-name="${room.name}" data-coefficient="${room.coefficient}">编辑</button>
+                    <button type="button" class="btn btn-danger" id="delete-${room.id}">删除</button>
+                </td>
+            `;
+            tableBody.appendChild(row);
+
+            // 为删除按钮添加点击事件监听器
+            document.getElementById(`delete-${room.id}`).addEventListener('click', function (event) {
+                event.preventDefault();
+                if (confirm('确定要删除这个房间吗？')) {
+                    fetch(`/api/rooms/${room.id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log('Success:', data);
+                            // 从表格中移除该行
+                            row.remove();
+                            // 重新获取房间列表
+                            fetchRooms();
+                        })
+                        .catch((error) => {
+                            console.error('Error:', error);
+                        });
+                }
+            });
+        });
+
+        document.getElementById('pageInfo').textContent = `第 ${currentPage} 页，共 ${Math.ceil(totalItems / itemsPerPage)} 页`;
+    }
+
+    // 定义上一页的函数
+    window.prevPage = function () {
+        if (currentPage > 1) {
+            currentPage--;
+            renderTable();
+        }
+    };
+
+    // 定义下一页的函数
+    window.nextPage = function () {
+        if (currentPage * itemsPerPage < totalItems) {
+            currentPage++;
+            renderTable();
+        }
+    };
+
+    // 处理表单提交
+
+});
+  </script>
+
+  <script src="static/app-assets/js/vendors.min.js" type="text/javascript"></script>
+  <script src="static/app-assets/js/app-menu.js" type="text/javascript"></script>
+  <script src="static/app-assets/js/app.js" type="text/javascript"></script>
+  <script src="static/app-assets/js/echarts.min.js" type="text/javascript"></script>
+  <script src="static/app-assets/js/sweetalert2.js" type="text/javascript"></script>
+  <script src="static/app-assets/laydate/laydate.js" type="text/javascript"></script>
+  <script>
+    lay('#version').html('-v' + laydate.v);
+    laydate.render({
+      elem: '#test1'
+      , range: true
+      , theme: '#00B5B8'
+    });
+  </script>
+
+</body>
+
+</html>

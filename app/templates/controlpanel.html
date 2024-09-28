@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html class="loading" lang="en" data-textdirection="ltr">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">
+  <meta name="author" content="PIXINVENT">
+  <title>管理后台</title>
+
+  <link rel="stylesheet" type="text/css" href="static/app-assets/css/vendors.css">
+  <link rel="stylesheet" type="text/css" href="static/app-assets/css/vertical-menu.css">
+  <link rel="stylesheet" type="text/css" href="static/app-assets/css/bootstrap-extended.css">
+  <style>
+    /* 固定模态框的宽度 */
+    .modal-dialog {
+      max-width: 800px;
+    }
+
+    /* 设置内容区域的最大高度，并添加滚动条 */
+    .modal-body {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    /* 固定导航栏 */
+    .fixed-top-nav {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      z-index: 1000;
+      background-color: #fff;
+      border-bottom: 1px solid #ddd;
+      padding: 10px;
+    }
+
+    .content-wrapper {
+      margin-top: 70px;
+      /* 为了避免导航栏遮挡内容 */
+    }
+  </style>
+
+</head>
+
+<body>
+  <!-- 导航栏 HTML 代码 -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top fixed-top-nav">
+    <a class="navbar-brand" href="#">快速导航</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav"
+      aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav" id="roomNav">
+        <!-- 动态生成的房间导航链接 -->
+      </ul>
+    </div>
+  </nav>
+  <div style="margin-top: 70px;"></div> <!-- 用于避免导航栏遮挡内容 -->
+
+
+  <!-- 选择会员模态框 -->
+  <div class="modal fade" id="memberModal" tabindex="-1" role="dialog" aria-labelledby="memberModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="memberModalLabel">选择会员</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <input type="text" class="form-control" id="searchMember" placeholder="搜索会员">
+          </div>
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th scope="col"><input type="checkbox" id="selectAll"></th>
+                <th scope="col">id</th>
+                <th scope="col">姓名</th>
+                <th scope="col">手机号</th>
+
+              </tr>
+            </thead>
+            <tbody id="memberList">
+              <!-- 其他会员数据 -->
+            </tbody>
+          </table>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+          <button type="button" class="btn btn-primary">确认选择</button>
+          <button type="button" class="btn btn-danger">确认并计时</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- 选择会员模态框相关脚本 -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // 使用事件委托处理“会员选择”按钮的点击事件
+      const roomsContainer = document.getElementById('roomsContainer');
+      roomsContainer.addEventListener('click', function (event) {
+        if (event.target && event.target.matches('button[data-toggle="modal"]')) {
+          const roomElement = event.target.closest('.content-wrapper');
+          const roomIdMatch = roomElement.querySelector('h3').textContent.match(/房间-(\d+)：/);
+          const roomId = roomIdMatch ? roomIdMatch[1] : null;
+          const modalId = event.target.getAttribute('data-target').replace('#', '');
+          const memberModal = document.getElementById(modalId);
+          const memberList = memberModal.querySelector('#memberList tbody');
+          const selectAllCheckbox = memberModal.querySelector('#selectAll');
+          const confirmButton = memberModal.querySelector('.btn-primary');
+          const confirmAndStartButton = memberModal.querySelector('.btn-danger');
+
+          console.log(`会员选择按钮被点击，房间ID: ${roomId}, 模态框ID: ${modalId}`);
+
+          // 加载未在房间中的会员数据
+          fetch(`/api/available_members`)
+            .then(response => {
+              console.log('Fetch response:', response);
+              return response.json();
+            })
+            .then(data => {
+              console.log('Fetched available members:', data);
+              memberList.innerHTML = ''; // 清空表格内容
+              data.forEach(member => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                                <td><input type="checkbox" class="member-checkbox" data-member-id="${member.id}" ${member.status === 'occupied' ? 'disabled' : ''}></td>
+                                <td>${member.id}</td>
+                                <td>${member.name}</td>
+                                <td>${member.phone}</td>
+                            `;
+                if (member.status === 'occupied') {
+                  row.style.color = 'gray';
+                }
+                memberList.appendChild(row);
+              });
+            })
+            .catch(error => console.error('Error fetching available members:', error));
+
+
+
+          // 确认选择按钮点击事件
+          confirmButton.addEventListener('click', function () {
+            console.log("确认选择按钮被点击");
+            const selectedMembers = getSelectedMembers(memberModal);
+            addMembersToRoom(selectedMembers, roomId, false);
+          });
+
+          // 确认并计时按钮点击事件
+          confirmAndStartButton.addEventListener('click', function () {
+            const selectedMembers = getSelectedMembers(memberModal);
+            addMembersToRoom(selectedMembers, roomId, true);
+          });
+        }
+      });
+
+      // 获取选中的会员ID
+      function getSelectedMembers(modal) {
+        const checkboxes = modal.querySelectorAll('.member-checkbox:checked');
+        return Array.from(checkboxes).map(checkbox => checkbox.getAttribute('data-member-id'));
+      }
+
+      // 添加会员到房间
+      // 添加会员到房间并不等于
+      function addMembersToRoom(memberIds, roomId, startTiming) {
+        fetch(`/api/rooms/${roomId}/members`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ member_ids: memberIds, start_timing: startTiming })
+        })
+          .then(response => response.json())
+          .then(data => {
+            console.log(data.message);
+            location.reload(); // 重新加载页面以更新会员列表
+          })
+          .catch(error => console.error('Error adding members to room:', error));
+      }
+    });
+  </script>
+
+
+  <!-- 商品选择模态框 -->
+  <div class="modal fade" id="productModal" tabindex="-1" role="dialog" aria-labelledby="productModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="productModalLabel">选择商品</h5>
+          <span id="memberName" class="ml-3"></span> <!-- 新增的元素 -->
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="fixed-top bg-white p-3">
+            <div class="form-group d-flex">
+              <input type="text" class="form-control" id="searchProduct" placeholder="搜索商品">
+              <button type="button" class="btn btn-primary ml-2" id="searchButton">搜索</button>
+            </div>
+          </div>
+          <div class="mt-5 pt-4">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th scope="col">id</th>
+                  <th scope="col">商品名</th>
+                  <th scope="col">积分</th>
+                  <th scope="col">数量</th>
+                </tr>
+              </thead>
+              <tbody id="productList">
+                <!-- 商品数据 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+          <button type="button" class="btn btn-primary" id="confirmProductSelection">确认选择</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="content-wrapper" id="roomsContainer">
+    <!--动态增加card-->
+  </div>
+
+  <!--cards生成脚本-->
+
+  <script src="static/app-assets/js/jquery.js"></script>
+
+
+
+  <script>
+    $(document).ready(function () {
+      $.ajax({
+        url: '/api/rooms',
+        method: 'GET',
+        success: function (data) {
+          console.log('AJAX请求成功:', data); // 打印成功响应数据
+          let roomsContainer = $('#roomsContainer');
+          let roomNav = $('#roomNav'); // 获取导航栏容器
+          roomsContainer.empty();
+          roomNav.empty(); // 清空导航栏内容
+          data.forEach(room => {
+            let modalId = `memberModal-${room.id}`;
+            let card = `
+        <div class="content-wrapper">
+            <div class="content-header">
+                <div class="content-header-left mb-2 clearfix">
+                    <h3 class="content-header-title mb-0" id="card-room-${room.id}">房间-${room.id}：${room.name}</h3>
+                </div>
+            </div>
+<div class="card" id="card-room-${room.id}">
+    <div class="card-content">
+        <div class="card-body">
+            <div class="searchbox">
+                <form class="form-inline">
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="姓名">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="请填写手机号">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" style="min-width: 300px;" class="form-control date" placeholder="起止时间" id="test1">
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">查询</button>
+                    </div>
+                </form>
+            </div>
+            <div class="funcbtn clearfix">
+                <div class="pull-left">
+                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#${modalId}">
+                        会员选择
+                    </button>
+                </div>
+            </div>
+            <div class="tablebox1">
+                <table class="table" id="members-table-${room.id}">
+                    <thead>
+                        <tr>
+                            <th>id</th>
+                            <th>姓名</th>
+                            <th>手机号</th>
+                            <th>积分余额</th>
+                            <th>消费记录</th> <!-- 新增的列 -->
+                            <th>开始时间</th>
+                            <th>结束时间</th>
+                            <th>本次积分</th>
+                            <th>结算人</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <!-- 会员信息将动态插入到这里 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+     
+        <!-- 模态框 -->
+        <div class="modal fade" id="${modalId}" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="exampleModalLabel">选择会员</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <table class="table" id="memberList">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th>ID</th>
+                                    <th>姓名</th>
+                                    <th>手机号</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- 会员信息将动态插入到这里 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+                        <button type="button" class="btn btn-primary">确认选择</button>
+                        <button type="button" class="btn btn-danger">确认并计时</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+            roomsContainer.append(card);
+            // 动态生成导航链接
+            let navItem = `
+          <li class="nav-item">
+            <a class="nav-link" href="#card-room-${room.id}">房间-${room.id}</a>
+          </li>
+        `;
+            roomNav.append(navItem);
+            $.ajax({
+              url: '/api/rooms/' + room.id + '/members',
+              method: 'GET',
+              success: function (members) {
+                var membersTableBody = $('#members-table-' + room.id + ' tbody');
+                membersTableBody.empty(); // 清空表格内容
+
+                members.forEach(function (member) {
+                  var memberRow = `
+        <tr id="row-${member.id}-${room.id}">
+            <td>${member.id}</td>
+            <td>${member.name}</td>
+            <td>${member.phone}</td>
+            <td id="room${room.id}-member${member.id}-pointsleft">${member.points}</td>
+            <td id="room${room.id}-member${member.id}-consumption">0</td> <!-- 新增的单元格 -->
+            <td id="room${room.id}-member${member.id}-timer-start"></td>
+            <td id="room${room.id}-member${member.id}-timer-end"></td>
+            <td id="room${room.id}-member${member.id}-points">待结算</td>
+            <td id="room${room.id}-member${member.id}-admin"></td> <!-- 新增操作员 -->
+            <td>
+                <button id="start-${member.id}-${room.id}" type="button" class="btn btn-info" onclick="startTimer(${room.id},${member.id})">
+                    开始计时
+                </button>
+                <button id="stop-${member.id}-${room.id}" type="button" class="btn btn-danger" onclick="stopTimer(${room.id},${member.id})">
+                    停止计时
+                </button>
+<button id="product-${member.id}-${room.id}" type="button" class="btn btn-primary" data-toggle="modal" data-target="#productModal" data-member-id="${member.id}" data-member-name="${member.name}" data-room-id="${room.id}">
+  购物车
+</button>
+<button id="remove-${member.id}-${room.id}" type="button" class="btn btn-primary">
+    移除
+</button>
+            </td>
+        </tr>
+                            `;
+                  membersTableBody.append(memberRow);
+
+
+                  document.querySelectorAll('[id^="remove-"]').forEach(button => {
+        button.addEventListener('click', function(event) {
+            const buttonId = event.target.id;
+            const [_, memberId, roomId] = buttonId.split('-');
+
+            // 发送请求到服务器以删除会员
+            fetch(`/api/rooms/${roomId}/members/${memberId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    //alert(data.message);
+                    // 移除表格中的对应行
+                    const row = document.getElementById(`row-${memberId}-${roomId}`);
+                    if (row) {
+                        row.remove();
+                    }
+                    // 清空 localStorage 的购物车信息
+                    localStorage.removeItem(`selectedProducts_${roomId}_${memberId}`);
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    });
+                  let timerElement = document.getElementById(`room${room.id}-member${member.id}-timer-start`);
+
+                  // 检查会员是否已经在计时，如果是，则启动计时器并更新按钮状态
+                  if (member.is_timing) {
+                    // 将开始时间转换为中国时区
+                    const startTime = new Date(member.start_time);
+                    const chinaTime = new Date(startTime.getTime() + (8 * 60 * 60 * 1000)); // UTC+8
+                    const formattedStartTime = chinaTime.toLocaleString('zh-CN', {
+                      timeZone: 'Asia/Shanghai',
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    });
+
+                    // 显示开始时间
+                    timerElement.innerText = `${formattedStartTime}`;
+                    let startButton = document.getElementById(`start-${member.id}-${room.id}`);
+                    let stopButton = document.getElementById(`stop-${member.id}-${room.id}`);
+                    if (startButton) startButton.style.display = 'none';
+                    if (stopButton) stopButton.style.display = 'inline-block';
+                  } else {
+                    console.log('会员未在计时:', member);
+                    timerElement.innerText = '未开始';
+                    let startButton = document.getElementById(`start-${member.id}-${room.id}`);
+                    let stopButton = document.getElementById(`stop-${member.id}-${room.id}`);
+                    if (startButton) startButton.style.display = 'inline-block';
+                    if (stopButton) stopButton.style.display = 'none';
+                  }
+
+                });
+              },
+              error: function (error) {
+                console.error('Error fetching members:', error);
+              }
+            });
+
+          });
+
+          // 添加平滑滚动效果
+          $('a.nav-link').on('click', function (event) {
+            if (this.hash !== "") {
+              event.preventDefault();
+              var hash = this.hash;
+              var target = $(hash);
+              if (target.length) {
+                $('html, body').animate({
+                  scrollTop: target.offset().top - 70 // 调整偏移量以考虑固定导航栏的高度
+                }, 800, function () {
+                  window.location.hash = hash;
+                });
+              }
+            }
+          });
+        },
+        error: function (err) {
+          console.error('Error fetching rooms:', err);
+        }
+      });
+
+    });
+
+
+
+//     document.addEventListener('DOMContentLoaded', function() {
+//     // 为所有移除按钮添加点击事件监听器
+
+// });
+  </script>
+
+  <script>
+
+
+    let timers = {}; // 用于存储计时器的对象
+
+    function startTimer(roomId, memberId) {
+      // 调用开始计时的接口
+      $.ajax({
+        url: `/api/start-timer/${roomId}/${memberId}`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ start_time: null }),
+        success: function (response) {
+          console.log('计时开始:', response);
+          // 启动计时器
+          if (!timers[memberId]) {
+            // 将响应中的 start_time 转换为 Date 对象
+
+            let utcTime = new Date(response.start_time);
+            console.log(utcTime)
+            // 将 UTC 时间转换为中国时区
+            let chinaTime = new Date(utcTime.getTime() + (8 * 60 * 60 * 1000));
+
+            // 格式化日期时间为 YYYY-MM-DD HH:mm
+            let year = chinaTime.getFullYear();
+            let month = String(chinaTime.getMonth() + 1).padStart(2, '0');
+            let day = String(chinaTime.getDate()).padStart(2, '0');
+            let hours = String(chinaTime.getHours()).padStart(2, '0');
+            let minutes = String(chinaTime.getMinutes()).padStart(2, '0');
+            let formattedStartTime = `${year}-${month}-${day} ${hours}:${minutes}`;
+            // 添加日期时间戳
+            document.getElementById(`room${roomId}-member${memberId}-timer-start`).innerText = formattedStartTime;
+
+            // 替换“开始计时”按钮为“停止计时”按钮
+            let startButton = document.getElementById(`start-${memberId}-${roomId}`);
+            let stopButton = document.getElementById(`stop-${memberId}-${roomId}`);
+            let removeButton = document.getElementById(`remove-${memberId}-${roomId}`);
+            removeButton.disabled = true;
+            if (startButton) startButton.style.display = 'none';
+            if (stopButton) stopButton.style.display = 'inline-block';
+
+          }
+        },
+        error: function (error) {
+          console.error('计时开始失败:', error);
+        }
+      });
+    }
+
+
+    function stopTimer(roomId, memberId) {
+
+      // 清除 localStorage 中的 selectedProducts
+      localStorage.removeItem(`selectedProducts_${roomId}_${memberId}`);
+      // 获取 stay_id
+      $.ajax({
+        url: `/api/rooms/${roomId}/members/${memberId}/stay`,
+        method: 'GET',
+        success: function (stayResponse) {
+          const stayId = stayResponse.id;
+          console.log('Stay ID:', stayId);
+
+          // 根据 stay_id 获取 total_points
+          $.ajax({
+            url: '/api/getconsumptions',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ stay_record_id: stayId }),
+            success: function (consumptionResponse) {
+              const totalPoints = consumptionResponse.total_points;
+              console.log('Total Points:', totalPoints);
+              //alert(`会员 ${memberId} 在房间 ${roomId} 消费: ${totalPoints}分`);
+
+              // 填充 total_points 到相应的单元格
+              document.getElementById(`room${roomId}-member${memberId}-consumption`).innerText = totalPoints;
+
+              // 调用停止计时的接口，并传入消费的总积分
+              $.ajax({
+                url: `/api/stop-timer/${memberId}/{{userid}}`,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ total_consumption_points: totalPoints }),
+                success: function (response) {
+                  console.log('计时停止:', response);
+                  // 将停止日期时间戳显示在<td id="room${roomId}-member${memberId}-timer-end">00:00:00</td>
+                  let utcTime = new Date(response.end_time);
+                  // 将 UTC 时间转换为中国时区
+                  let chinaTime = new Date(utcTime.getTime() + (8 * 60 * 60 * 1000));
+                  // 格式化日期时间为 YYYY-MM-DD HH:mm
+                  let year = chinaTime.getFullYear();
+                  let month = String(chinaTime.getMonth() + 1).padStart(2, '0');
+                  let day = String(chinaTime.getDate()).padStart(2, '0');
+                  let hours = String(chinaTime.getHours()).padStart(2, '0');
+                  let minutes = String(chinaTime.getMinutes()).padStart(2, '0');
+                  let formattedEndTime = `${year}-${month}-${day} ${hours}:${minutes}`;
+                  document.getElementById(`room${roomId}-member${memberId}-timer-end`).innerText = formattedEndTime;
+                  let tm = parseInt(document.getElementById(`room${roomId}-member${memberId}-pointsleft`).innerText);
+
+                  // 更新积分（假设接口返回积分）
+                  document.getElementById(`room${roomId}-member${memberId}-points`).innerText = response.net_points;
+
+                  document.getElementById(`room${roomId}-member${memberId}-pointsleft`).innerText = parseInt(tm) + parseInt(response.net_points);
+                  document.getElementById(`room${roomId}-member${memberId}-admin`).innerText = '{{username}}'
+
+
+                  // 弹出获得的积分
+                  console.log(response.net_points);
+                  //alert(`会员 ${memberId} 获得的净积分: ${response.net_points}`);
+
+                  // 将按钮置于不可用状态
+                  let stopButton = document.getElementById(`stop-${memberId}-${roomId}`);
+                  if (stopButton) {
+                    stopButton.disabled = true;
+                    stopButton.innerText = '已结算';
+                  }
+
+                  // 将购物车按钮置于不可用状态
+                  let productButton = document.getElementById(`product-${memberId}-${roomId}`);
+                  if (productButton) {
+                    productButton.disabled = true;
+                    productButton.innerText = '购物车';
+                  }
+
+                  // 将移除按钮置于不可用状态
+                  let removeButton = document.getElementById(`remove-${memberId}-${roomId}`);
+                  if (removeButton) {
+                    removeButton.disabled = true;
+                    removeButton.innerText = '移除';
+                  }
+                },
+                error: function (error) {
+                  console.error('停止计时失败:', error);
+                }
+              });
+            },
+            error: function (error) {
+              console.error('获取总积分失败:', error);
+            }
+          });
+        },
+        error: function (error) {
+          console.error('获取 stay_id 失败:', error);
+        }
+      });
+    }
+
+    // 页面加载时获取计时信息
+
+  </script>
+  <script src="static/app-assets/js/jquery.js"></script>
+  <script src="static/app-assets/js/vendors.min.js" type="text/javascript"></script>
+  <script src="static/app-assets/js/app-menu.js" type="text/javascript"></script>
+  <script src="static/app-assets/js/app.js" type="text/javascript"></script>
+  <script src="static/app-assets/js/echarts.min.js" type="text/javascript"></script>
+  <script src="static/app-assets/js/sweetalert2.js" type="text/javascript"></script>
+  <script src="static/app-assets/laydate/laydate.js" type="text/javascript"></script>
+
+  <script>
+    lay('#version').html('-v' + laydate.v);
+    laydate.render({
+      elem: '#test1'
+      , range: true
+      , theme: '#00B5B8'
+    });
+  </script>
+
+
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const productModal = document.getElementById('productModal');
+      const productList = productModal.querySelector('#productList');
+      const confirmProductSelectionButton = productModal.querySelector('#confirmProductSelection');
+      const searchProductInput = document.getElementById('searchProduct');
+      const searchButton = document.getElementById('searchButton');
+      const memberNameElement = document.getElementById('memberName');
+      let currentStayId = null; // 用于存储当前的 stay_id
+
+
+      // 全局对象缓存每个会员的已选商品信息
+      const memberSelectedProducts = {};
+
+      // 加载商品数据并设置已选择的商品数量
+      function loadProducts(memberId, roomId, selectedProducts = []) {
+        // 确保 selectedProducts 是一个数组
+        if (!Array.isArray(selectedProducts)) {
+          selectedProducts = [];
+        }
+
+        // 从 localStorage 获取已选择的商品数据
+        const storedProducts = localStorage.getItem(`selectedProducts_${roomId}_${memberId}`);
+        if (storedProducts) {
+          selectedProducts = JSON.parse(storedProducts);
+        }
+
+        fetch('/api/products')
+          .then(response => response.json())
+          .then(data => {
+            const productList = document.getElementById('productList');
+            productList.innerHTML = ''; // 清空表格内容
+            data.forEach(product => {
+              // 从 selectedProducts 中查找对应的商品
+              const selectedProduct = selectedProducts.find(p => p.product_id === product.id);
+              // 如果在 selectedProducts 中找到对应的商品，则使用其数量，否则使用接口返回的数量
+              const quantity = selectedProduct ? selectedProduct.quantity : 0;
+              const row = document.createElement('tr');
+              row.innerHTML = `
+          <td>${product.id}</td>
+          <td>${product.name}</td>
+          <td>${product.points}</td>
+          <td><input type="number" class="form-control product-quantity" data-product-id="${product.id}" min="0" value="${quantity}"></td>
+        `;
+              productList.appendChild(row);
+            });
+
+            // 缓存当前会员的已选商品信息
+            memberSelectedProducts[memberId] = selectedProducts;
+          })
+          .catch(error => {
+            console.error('Error loading products:', error);
+          });
+      }
+
+      // 购物车按钮点击事件
+      document.addEventListener('click', function (event) {
+        if (event.target && event.target.matches('button[id^="product-"]')) {
+          const memberId = event.target.getAttribute('data-member-id');
+          const memberName = event.target.getAttribute('data-member-name');
+          const roomId = event.target.getAttribute('data-room-id');
+          memberNameElement.textContent = `会员姓名: ${memberName}`; // 设置会员姓名
+
+          // 设置模态框中确认按钮的 data-room-member-id 属性
+          // 生成 data-room-member-id 属性值
+          const roomMemberId = `${roomId}-${memberId}`;
+          const confirmButton = document.getElementById('confirmProductSelection');
+          confirmButton.setAttribute('data-room-member-id', roomMemberId);
+
+          // 调用新的API获取stay记录
+          fetch(`/api/rooms/${roomId}/members/${memberId}/stay`)
+            .then(response => response.json())
+            .then(data => {
+              if (data.message) {
+                //alert(data.message); // 如果有错误信息，弹出提示
+              } else {
+                currentStayId = data.id; // 存储当前的 stay_id
+
+                // 从 localStorage 中获取已选择的商品数量
+                const storedProducts = localStorage.getItem(`selectedProducts_${roomId}_${memberId}`);
+                const selectedProducts = storedProducts ? JSON.parse(storedProducts) : [];
+
+                // 加载商品数据并设置已选择的商品数量
+                loadProducts(memberId, roomId, selectedProducts);
+                $('#productModal').modal('show'); // 显示模态框
+              }
+            })
+            .catch(error => {
+              console.error('Error fetching stay record:', error);
+              //alert('获取stay记录时出错，请重试');
+            });
+        }
+      });
+
+      let lastSelectedProducts = [];
+
+      confirmProductSelectionButton.addEventListener('click', function () {
+        const selectedProducts = [];
+        productModal.querySelectorAll('.product-quantity').forEach(input => {
+          const quantity = parseInt(input.value);
+          if (quantity > 0) {
+  const productId = parseInt(input.getAttribute('data-product-id'), 10); // 将 productId 转换为数字类型
+  selectedProducts.push({ product_id: productId, quantity: quantity });
+}
+        });
+
+        // 比较当前选择的商品和上一次选择的商品
+        const isSameSelection = JSON.stringify(selectedProducts) === JSON.stringify(lastSelectedProducts);
+        if (isSameSelection) {
+          //alert('商品选择没有变化，不需要提交');
+          // 关闭模态框
+          $('#productModal').modal('hide');
+          return;
+        }
+
+        // 发送选择的商品和数量到服务器
+        fetch('/api/consumptions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ products: selectedProducts, stay_record_id: currentStayId }) // 包含 stay_record_id
+        })
+          .then(response => response.json())
+          .then(data => {
+            console.log('Products added:', data);
+            // 保存当前选择的商品和数量到 localStorage
+            // 获取模态框元素
+            const productModal = document.querySelector('#productModal');
+            console.log(productModal); // 输出模态框元素以检查是否正确获取
+
+            // // 在模态框中查找具有 data-member-id 属性的按钮
+            const button = productModal.querySelector('button[data-room-member-id]');
+            console.log(button); // 输出按钮元素以检查是否正确获取
+
+            // 获取 data-room-member-id 属性值
+            const roomMemberId = button.getAttribute('data-room-member-id');
+            console.log(roomMemberId); // 输出 roomMemberId 以检查是否正确获取
+
+            // 分割 roomMemberId 以提取 roomId 和 memberId
+            const [roomId, memberId] = roomMemberId.split('-');
+            console.log(`Room ID: ${roomId}, Member ID: ${memberId}`); // 输出 roomId 和 memberId 以检查是否正确提取
+            localStorage.setItem(`selectedProducts_${roomId}_${memberId}`, JSON.stringify(selectedProducts));
+
+            // 保存当前选择的商品和数量
+            lastSelectedProducts = selectedProducts;
+
+            // 关闭模态框
+            $('#productModal').modal('hide');
+          })
+          .catch(error => {
+            console.error('Error adding products:', error);
+            //alert('提交商品选择时出错，请重试');
+          });
+      });
+
+      // 搜索商品功能
+      function searchProducts() {
+        const searchTerm = searchProductInput.value.toLowerCase();
+        const rows = productList.getElementsByTagName('tr');
+        Array.from(rows).forEach(row => {
+          const productName = row.cells[1].innerText.toLowerCase();
+          if (productName.includes(searchTerm)) {
+            row.style.display = '';
+          } else {
+            row.style.display = 'none';
+          }
+        });
+      }
+
+      searchButton.addEventListener('click', searchProducts);
+      searchProductInput.addEventListener('keypress', function (event) {
+        if (event.key === 'Enter') {
+          searchProducts();
+        }
+      });
+    });
+  </script>
+
+</body>
+
+</html>

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html class="loading" lang="en" data-textdirection="ltr">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">
+  <meta name="author" content="PIXINVENT">
+  <title>管理后台</title>
+  <link rel="stylesheet" type="text/css" href="static/app-assets/css/vendors.css">
+  <link rel="stylesheet" type="text/css" href="static/app-assets/css/vertical-menu.css">
+  <link rel="stylesheet" type="text/css" href="static/app-assets/css/bootstrap-extended.css">
+
+  <style>
+    .form-group {
+      position: relative;
+      margin-right: 15px;
+    }
+
+    .invalid-feedback {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      display: none;
+    }
+
+    .form-control.is-invalid+.invalid-feedback {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="content-wrapper">
+    <div class="content-header ">
+      <div class="content-header-left mb-2 clearfix">
+        <h3 class="content-header-title mb-0">商品管理</h3>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-content">
+          <div class="card-body">
+              <div class="searchbox">
+                  <form class="form-inline" id="create-products-form">
+                      <div class="form-group">
+                          <input type="text" class="form-control" id="products-name" placeholder="商品名" required>
+                          <div class="invalid-feedback">商品名不能为空</div>
+                      </div>
+                      <div class="form-group">
+                          <input type="number" class="form-control" id="products-points" placeholder="积分" min="0" step="1" required>
+                          <div class="invalid-feedback">积分不能为空</div>
+                      </div>
+                      <div class="form-group">
+                          <button type="submit" class="btn btn-primary">新建商品</button>
+                      </div>
+                  </form>
+              </div>
+  
+              <div class="funcbtn clearfix"></div>
+              <div class="tablebox1">
+                  <table class="table">
+                      <thead>
+                          <tr>
+                              <th>id</th>
+                              <th>名称</th>
+                              <th>积分</th>
+                              <th>操作</th>
+                          </tr>
+                      </thead>
+                      <tbody id="products-table-body">
+                          <!-- 动态生成的表格行将插入到这里 -->
+                      </tbody>
+                  </table>
+              </div>
+              <div class="pagination">
+                  <button id="prevPage" class="btn btn-secondary" onclick="prevPage()">上一页</button>
+                  <span id="pageInfo"></span>
+                  <button id="nextPage" class="btn btn-secondary" onclick="nextPage()">下一页</button>
+              </div>
+          </div>
+      </div>
+  </div>
+  </div>
+
+  <script>
+    document.getElementById('products-points').addEventListener('input', function (e) {
+      const value = e.target.value;
+      if (value && (value < 0 || !Number.isInteger(Number(value)))) {
+        e.target.setCustomValidity('积分必须是大于等于0的整数');
+      } else {
+        e.target.setCustomValidity('');
+      }
+    });
+
+    document.getElementById('create-products-form').addEventListener('submit', function (e) {
+      const form = e.target;
+      if (!form.checkValidity()) {
+        e.preventDefault();
+        e.stopPropagation();
+        form.classList.add('was-validated');
+      }
+    });
+  </script>
+  <!-- 编辑商品模态框 -->
+  <div class="modal fade" id="editproductsModal" tabindex="-1" role="dialog" aria-labelledby="editproductsModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editproductsModalLabel">编辑商品</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="editproductsForm">
+            <div class="form-group">
+              <label for="productsName">商品名称</label>
+              <input type="text" class="form-control" id="productsName" required>
+              <div class="invalid-feedback">商品名称不能为空</div>
+            </div>
+            <div class="form-group">
+              <label for="productspoints">积分</label>
+              <input type="number" class="form-control" id="modalproductspoints" min="0" step="1" required>
+              <div class="invalid-feedback">积分不能为空</div>
+            </div>
+            <input type="hidden" id="productsId">
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+          <button type="button" class="btn btn-primary" id="saveproductsChanges">保存更改</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('productspoints').addEventListener('input', function (e) {
+      const value = e.target.value;
+      if (value && (value < 0 || !Number.isInteger(Number(value)))) {
+        e.target.setCustomValidity('积分必须是大于等于0的整数');
+      } else {
+        e.target.setCustomValidity('');
+      }
+    });
+
+    document.getElementById('editproductsForm').addEventListener('submit', function (e) {
+      const form = e.target;
+      if (!form.checkValidity()) {
+        e.preventDefault();
+        e.stopPropagation();
+        form.classList.add('was-validated');
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const pointsInput = document.getElementById('modalproductspoints');
+      pointsInput.addEventListener('input', function() {
+          const value = pointsInput.value;
+          if (value === '' || !Number.isInteger(Number(value)) || Number(value) < 0) {
+              pointsInput.setCustomValidity('积分不能为空，且必须是大于等于0的整数');
+          } else {
+              pointsInput.setCustomValidity('');
+          }
+      });
+  });
+  </script>
+
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // 使用事件委托监听编辑按钮点击事件
+      document.addEventListener('click', function (event) {
+        if (event.target && event.target.id.startsWith('edit-')) {
+          event.preventDefault();
+          const productsId = event.target.id.split('-')[1];
+          const productsName = event.target.dataset.name;
+          const productspoints = event.target.dataset.points;
+
+          // 填充模态框中的表单
+          document.getElementById('productsId').value = productsId;
+          document.getElementById('productsName').value = productsName;
+          document.getElementById('modalproductspoints').value = productspoints;
+
+          // 显示模态框
+          $('#editproductsModal').modal('show');
+        }
+      });
+
+      document.getElementById('saveproductsChanges').addEventListener('click', function () {
+        const productsId = document.getElementById('productsId').value.trim();
+        const productsName = document.getElementById('productsName').value.trim();
+        const productspoints = document.getElementById('modalproductspoints').value.trim();
+
+        // 校验输入字段是否为空
+        if (!productsId || !productsName || !productspoints) {
+          alert('所有字段都不能为空');
+          return; // 阻止发送更新请求
+        }
+
+                // 校验 productspoints 是否为非负整数
+        if (!Number.isInteger(Number(productspoints)) || Number(productspoints) < 0) {
+            alert('积分必须是大于等于0的整数');
+            return; // 阻止发送更新请求
+        }
+
+        // 发送更新请求到服务器
+        fetch(`api/products/${productsId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: productsName,
+            points: productspoints
+          })
+        })
+          .then(response => response.json())
+          .then(data => {
+            if (data.message === 'Product updated') {
+              // 更新成功，刷新页面或更新页面内容
+              location.reload();
+            } else {
+              // 处理错误
+              //alert('更新失败: ' + data.message);
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+          });
+
+        // 关闭模态框
+        $('#editproductsModal').modal('hide');
+      });
+    });
+  </script>
+  <script>
+    document.getElementById('create-products-form').addEventListener('submit', function (event) {
+      event.preventDefault(); // 阻止表单的默认提交行为
+
+      // 获取输入框的值
+      const productsName = document.getElementById('products-name').value.trim();
+      const productspoints = document.getElementById('products-points').value.trim();
+
+      // 获取输入框元素
+      const productsNameInput = document.getElementById('products-name');
+      const productspointsInput = document.getElementById('products-points');
+
+      // 初始化验证状态
+      let isValid = true;
+
+      // 验证商品名是否为空
+      if (!productsName) {
+        productsNameInput.classList.add('is-invalid');
+        isValid = false;
+      } else {
+        productsNameInput.classList.remove('is-invalid');
+      }
+
+      // 验证积分是否为空
+      if (!productspoints) {
+        productspointsInput.classList.add('is-invalid');
+        isValid = false;
+      } else {
+        productspointsInput.classList.remove('is-invalid');
+      }
+
+      // 如果验证未通过，阻止表单提交
+      if (!isValid) {
+        return;
+      }
+
+      // 发送请求
+      fetch('/api/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: productsName,
+          points: productspoints
+        })
+      })
+        .then(response => response.json())
+        .then(data => {
+          console.log('Success:', data);
+          // 可以在这里添加代码来更新页面，比如清空表单或显示成功消息
+          location.reload();
+        })
+        .catch((error) => {
+          console.error('Error:', error);
+          // 可以在这里添加代码来显示错误消息
+        });
+    });
+  </script>
+
+  <script>
+document.addEventListener('DOMContentLoaded', function () {
+    const productsTableBody = document.getElementById('products-table-body');
+    const pageInfo = document.getElementById('pageInfo');
+    const itemsPerPage = 10;
+    let currentPage = 1;
+    let totalItems = 0;
+    let products = [];
+
+    // 页面加载时获取所有商品
+    fetchProducts();
+
+    // 定义获取商品的函数
+    function fetchProducts() {
+        // 调用 API 获取商品列表
+        fetch('/api/products')
+            .then(response => response.json())
+            .then(data => {
+                products = data;
+                totalItems = products.length;
+                currentPage = 1;
+                renderTable();
+            })
+            .catch(error => console.error('Error fetching products data:', error));
+    }
+
+    // 定义渲染表格的函数
+    function renderTable() {
+        productsTableBody.innerHTML = ''; // 清空表格内容
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const pageItems = products.slice(start, end);
+
+        pageItems.forEach(product => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${product.id}</td>
+                <td>${product.name}</td>
+                <td>${product.points}</td>
+                <td>
+                    <button type="button" class="btn btn-info" id="edit-${product.id}" data-name="${product.name}" data-points="${product.points}">编辑</button>
+                    <button type="button" class="btn btn-danger" id="delete-${product.id}">删除</button>
+                </td>
+            `;
+            productsTableBody.appendChild(row);
+
+            // 为删除按钮添加点击事件监听器
+            document.getElementById(`delete-${product.id}`).addEventListener('click', function (event) {
+                event.preventDefault();
+                if (confirm('确定要删除这个商品吗？')) {
+                    fetch(`/api/products/${product.id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log('Success:', data);
+                            // 从表格中移除该行
+                            row.remove();
+                            // 重新获取商品列表
+                            fetchProducts();
+                        })
+                        .catch((error) => {
+                            console.error('Error:', error);
+                        });
+                }
+            });
+        });
+
+        pageInfo.textContent = `第 ${currentPage} 页，共 ${Math.ceil(totalItems / itemsPerPage)} 页`;
+    }
+
+    // 定义上一页的函数
+    window.prevPage = function () {
+        if (currentPage > 1) {
+            currentPage--;
+            renderTable();
+        }
+    };
+
+    // 定义下一页的函数
+    window.nextPage = function () {
+        if (currentPage * itemsPerPage < totalItems) {
+            currentPage++;
+            renderTable();
+        }
+    };
+
+});
+  </script>
+
+  <script src="static/app-assets/js/vendors.min.js" type="text/javascript"></script>
+  <script src="static/app-assets/js/app-menu.js" type="text/javascript"></script>
+  <script src="static/app-assets/js/app.js" type="text/javascript"></script>
+  <script src="static/app-assets/js/echarts.min.js" type="text/javascript"></script>
+  <script src="static/app-assets/js/sweetalert2.js" type="text/javascript"></script>
+  <script src="static/app-assets/laydate/laydate.js" type="text/javascript"></script>
+  <script>
+    lay('#version').html('-v' + laydate.v);
+    laydate.render({
+      elem: '#test1'
+      , range: true
+      , theme: '#00B5B8'
+    });
+  </script>
+
+</body>
+
+</html>

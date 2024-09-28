@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html class="loading" lang="en" data-textdirection="ltr">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">
+<meta name="author" content="PIXINVENT">
+<title>管理后台</title>
+<script src="{{ url_for('static', filename='app-assets/js/popper.js') }}" type="text/javascript"></script> 
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='app-assets/css/vendors.css') }}">
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='app-assets/css/vertical-menu.css') }}">
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='app-assets/css/bootstrap-extended.css') }}">
+<style>
+  .dropdown-menu {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+</style>
+
+</head>
+<body>
+<div class="content-wrapper">
+  <div class="content-header ">
+    <div class="d-flex justify-content-between align-items-center">
+      <h3 class="content-header-title mb-0">商品选择 - {{ member.name }}</h3>
+      <button class="btn btn-secondary" onclick="history.back()">返回</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-content">
+      <div class="card-body">
+        <div class="searchbox">
+          <form class="form-inline">
+            <div class="form-group mr-2">
+              <label for="roomName" class="mr-2">房间名:</label>
+              <input id="roomName" class="form-control" placeholder="选择或输入房间名">
+              <div class="dropdown">
+                <button class="btn btn-secondary dropdown-toggle ml-2" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                  选择房间
+                </button>
+                <div class="dropdown-menu" aria-labelledby="dropdownMenuButton" id="roomDropdown">
+                  <!-- 动态填充房间名 -->
+                </div>
+              </div>
+            </div>
+            <div class="form-group mr-2">
+              <label for="test1" class="mr-2">起止时间:</label>
+              <input type="text" style="min-width: 300px;" class="form-control date" placeholder="起止时间" id="test1">
+            </div>
+            <div class="form-group">
+              <button type="button" class="btn btn-primary" onclick="filterTable()">查询</button>
+            </div>
+          </form>
+        </div>
+        <div class="tablebox1">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>房间</th>
+                <th>开始时间</th>
+                <th>结束时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="stayRecords">
+              <!-- 动态填充数据 -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 消费记录模态框 -->
+<div class="modal fade" id="consumptionModal" tabindex="-1" role="dialog" aria-labelledby="consumptionModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="consumptionModalLabel">消费记录</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <!-- 消费记录内容 -->
+        <table class="table">
+          <thead>
+            <tr>
+              <th>商品</th>
+              <th>数量</th>
+              <th>积分</th>
+            </tr>
+          </thead>
+          <tbody id="consumptionRecords">
+            <!-- 动态插入消费记录 -->
+          </tbody>
+        </table>
+        <p>总积分: <span id="totalPoints">0</span></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // 将传入的 member 变量转换为 JSON 对象
+    memberData = JSON.parse('{{ member|tojson }}');
+
+    if (memberData && memberData.id) {
+      // 发起 AJAX 请求获取会员详细信息
+      $.ajax({
+        url: `/api/member/${memberData.id}/details`,
+        method: 'GET',
+        success: function(data) {
+          const tbody = $('#stayRecords');
+          tbody.empty();
+
+          if (data.length === 0) {
+            tbody.append('<tr><td colspan="4">无</td></tr>');
+          } else {
+            data.forEach(record => {
+              const row = `<tr>
+                <td>${record.room_name}</td>
+                <td>${record.start_time}</td>
+                <td>${record.end_time}</td>
+                <td><button class="btn btn-primary" onclick="loadConsumptionRecords(${record.room_id})" data-toggle="modal" data-target="#consumptionModal">消费记录</button></td>
+              </tr>`;
+              tbody.append(row);
+            });
+          }
+        },
+        error: function(error) {
+          console.error('Error fetching member details:', error);
+        }
+      });
+    } else {
+      console.error('No member data found');
+    }
+  });
+
+  function loadConsumptionRecords(memberId) {
+    $.ajax({
+      url: `/api/member/${memberId}/details`,
+      method: 'GET',
+      success: function(data) {
+        const tbody = $('#consumptionRecords');
+        tbody.empty();
+        let totalPoints = 0;
+
+        if (data.length === 0) {
+          tbody.append('<tr><td colspan="3">暂无消费记录</td></tr>');
+        } else {
+          data.forEach(record => {
+            record.products.forEach(product => {
+              const row = `<tr>
+                <td>${product.name}</td>
+                <td>${product.quantity}</td>
+                <td>${product.points}</td>
+              </tr>`;
+              tbody.append(row);
+              totalPoints += product.points * product.quantity; // 计算总积分时考虑商品数量
+            });
+          });
+        }
+
+        $('#totalPoints').text(totalPoints);
+      },
+      error: function(error) {
+        console.error('Error fetching consumption records:', error);
+      }
+    });
+  }
+</script>
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/laydate@5.0.9/laydate.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    laydate.render({
+      elem: '#test1',
+      type: 'datetime',
+      range: true,
+      theme: '#00B5B8'
+    });
+
+    // 动态填充房间名
+    const roomNames = new Set();
+    const rows = document.querySelectorAll('#stayRecords tr');
+    rows.forEach(row => {
+      const roomName = row.cells[0].textContent.trim();
+      if (roomName) {
+        roomNames.add(roomName);
+      }
+    });
+
+    const roomDropdown = document.getElementById('roomDropdown');
+ 
+    roomNames.forEach(name => {
+      const dropdownItem = document.createElement('a');
+      dropdownItem.className = 'dropdown-item';
+      dropdownItem.href = '#';
+      dropdownItem.textContent = name;
+      dropdownItem.onclick = function() {
+        document.getElementById('roomName').value = name;
+      };
+      console.log(dropdownItem)
+      roomDropdown.appendChild(dropdownItem);
+    });
+  });
+
+  function filterTable() {
+    const roomName = document.getElementById('roomName').value.toLowerCase();
+    const dateRange = document.getElementById('test1').value.split(' - ');
+    const startTime = dateRange[0] ? new Date(dateRange[0]) : null;
+    const endTime = dateRange[1] ? new Date(dateRange[1]) : null;
+    const tbody = document.getElementById('stayRecords');
+    const rows = tbody.getElementsByTagName('tr');
+
+    for (let i = 0; i < rows.length; i++) {
+      const roomCell = rows[i].getElementsByTagName('td')[0];
+      const startCell = rows[i].getElementsByTagName('td')[1];
+
+      const roomText = roomCell.textContent.toLowerCase();
+      const startText = new Date(startCell.textContent);
+
+      const roomMatch = roomName === '' || roomText.includes(roomName);
+      const startMatch = !startTime || (startText >= startTime && (!endTime || startText <= endTime));
+
+      if (roomMatch && startMatch) {
+        rows[i].style.display = '';
+      } else {
+        rows[i].style.display = 'none';
+      }
+    }
+  }
+</script>
+
+
+
+<script src="{{ url_for('static', filename='app-assets/js/vendors.min.js') }}" type="text/javascript"></script> 
+<script src="{{ url_for('static', filename='app-assets/js/app-menu.js') }}" type="text/javascript"></script> 
+<script src="{{ url_for('static', filename='app-assets/js/app.js') }}" type="text/javascript"></script> 
+<script src="{{ url_for('static', filename='app-assets/js/echarts.min.js') }}" type="text/javascript"></script> 
+<script src="{{ url_for('static', filename='app-assets/js/sweetalert2.js') }}" type="text/javascript"></script> 
+<script src="{{ url_for('static', filename='app-assets/laydate/laydate.js') }}" type="text/javascript"></script> 
+<script>
+lay('#version').html('-v'+ laydate.v);
+laydate.render({
+    elem: '#test1',
+    range: true,
+    theme: '#00B5B8'
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台</title>
+    <link rel="stylesheet" href="static/app-assets/css/bootstrap.css">
+</head>
+
+<body>
+    <div class="container mt-5">
+        <h3>数据备份</h3>
+        <p>请设置备份参数并点击“保存备份”按钮进行数据备份。</p>
+        <div class="card">
+            <div class="card-body">
+                <form id="backupForm">
+                    <div class="form-group">
+                        <label for="backupInterval">备份间隔（分钟）：</label>
+                        <input type="number" id="backupInterval" class="form-control" value="5" min="1">
+                        <small class="form-text text-muted">设置自动备份的时间间隔（以分钟为单位）。</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="backupTime">定时备份时间（HH:MM）：</label>
+                        <input type="time" id="backupTime" class="form-control">
+                        <small class="form-text text-muted">设置每天定时备份的时间。</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="backupDrive">选择备份存储盘符：</label>
+                        <select id="backupDrive" class="form-control">
+                            <option value="C">C盘</option>
+                            <option value="D">D盘</option>
+                        </select>
+                        <small class="form-text text-muted">选择备份文件存储的盘符。</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="maxIntervalBackups">最大间隔备份数量：</label>
+                        <input type="number" id="maxIntervalBackups" class="form-control" value="5"  min="1">
+                        <small class="form-text text-muted">设置同时保留的最大间隔备份文件数量。</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="maxTimeBackups">最大定时备份数量：</label>
+                        <input type="number" id="maxTimeBackups" class="form-control" value="5"  min="1">
+                        <small class="form-text text-muted">设置同时保留的最大定时备份文件数量。</small>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="backupDatabase() " id='saveBackupSettings'>保存备份</button>
+                </form>
+            </div>
+        </div>
+
+        <h3 class="mt-5">数据恢复</h3>
+        <p>请选择恢复盘符并点击“加载备份列表”按钮查看备份文件。</p>
+        <div class="card">
+            <div class="card-body">
+            <form id="restoreForm">
+                <div class="form-group">
+                <label for="restoreDrive">选择恢复盘符：</label>
+                <select id="restoreDrive" class="form-control">
+                    <option value="C">C盘</option>
+                    <option value="D">D盘</option>
+                </select>
+                <small class="form-text text-muted">选择存储备份文件的盘符。</small>
+                </div>
+
+                <button type="button" class="btn btn-primary" onclick="loadBackups()">加载备份列表</button>
+            </form>
+            <div id="backupList" class="mt-3"></div>
+            <button id="confirmRestoreButton" class="btn btn-danger mt-3" style="display: none;" onclick="restoreBackup()">确认恢复</button>
+            </div>
+        </div>
+    </div>
+    <script src="static/app-assets/js/jquery.js"></script>
+    <script src="static/app-assets/js/bootstrap.bundle.min.js"></script>
+
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // 获取备份设置
+      fetch('/api/get_backup_settings')
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('backupInterval').value = data.backupInterval;
+          document.getElementById('backupTime').value = data.backupTime;
+          document.getElementById('backupDrive').value = data.backupDrive;
+          document.getElementById('maxIntervalBackups').value = data.maxIntervalBackups;
+          document.getElementById('maxTimeBackups').value = data.maxTimeBackups;
+        })
+        .catch(error => console.error('Error:', error));
+
+      // 保存备份设置
+      document.getElementById('saveBackupSettings').addEventListener('click', function() {
+        const backupInterval = document.getElementById('backupInterval').value;
+        const backupTime = document.getElementById('backupTime').value;
+        const backupDrive = document.getElementById('backupDrive').value;
+        const maxIntervalBackups = document.getElementById('maxIntervalBackups').value;
+        const maxTimeBackups = document.getElementById('maxTimeBackups').value;
+
+        const requestBody = {
+          backupInterval: backupInterval,
+          backupTime: backupTime,
+          backupDrive: backupDrive,
+          maxIntervalBackups: maxIntervalBackups,
+          maxTimeBackups: maxTimeBackups
+        };
+
+        fetch('/api/save_backup_settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            alert('备份设置已保存');
+          } else {
+            alert('保存失败');
+          }
+        })
+        .catch(error => console.error('Error:', error));
+      });
+    });
+
+
+    function backupDatabase() {
+      const backupDrive = document.getElementById('backupDrive').value;
+      const backupInterval = document.getElementById('backupInterval').value;
+      const backupTime = document.getElementById('backupTime').value;
+      const maxIntervalBackups = document.getElementById('maxIntervalBackups').value;
+      const maxTimeBackups = document.getElementById('maxTimeBackups').value;
+
+      if (!backupDrive) {
+        alert('请选择备份存储盘符');
+        return;
+      }
+
+      const requestBody = {
+        drive: backupDrive,
+        max_interval_backups: maxIntervalBackups,
+        max_time_backups: maxTimeBackups
+      };
+
+        requestBody.backup_time = backupTime;
+      
+        requestBody.interval = backupInterval;
+      
+
+      fetch('/api/backup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          alert('备份失败: ' + data.error);
+        } else {
+          const backupFilename = data.backup_filename;
+          fetch(`/backup/${backupFilename}`)
+            .then(response => response.blob())
+            .then(blob => {
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.style.display = 'none';
+              a.href = url;
+              a.download = backupFilename;
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              alert('备份成功');
+            })
+            .catch(error => {
+              alert('备份文件下载失败: ' + error);
+            });
+        }
+      })
+      .catch(error => {
+        alert('备份失败: ' + error);
+      });
+    }
+
+        function loadBackups() {
+        const restoreDrive = document.getElementById('restoreDrive').value;
+        if (!restoreDrive) {
+            alert('请选择恢复盘符');
+            return;
+        }
+
+        fetch(`/api/backups?drive=${restoreDrive}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('加载备份列表失败: ' + data.error);
+            } else {
+                const backupList = document.getElementById('backupList');
+                backupList.innerHTML = '';
+
+                if (data.backups.length === 0) {
+                    backupList.innerHTML = '<p>路径下未发现备份</p>';
+                    document.getElementById('confirmRestoreButton').style.display = 'none';
+                } else {
+                    data.backups.forEach(backup => {
+                        const backupItem = document.createElement('div');
+                        backupItem.className = 'backup-item';
+                        backupItem.innerHTML = `
+                            <input type="radio" name="backup" value="${backup.filename}">
+                            <label>${backup.filename} (${backup.type})</label>
+                        `;
+                        backupList.appendChild(backupItem);
+                    });
+
+                    // 显示确认恢复按钮
+                    document.getElementById('confirmRestoreButton').style.display = 'block';
+                }
+            }
+        })
+        .catch(error => {
+            alert('加载备份列表失败: ' + error);
+        });
+    }
+
+        function restoreBackup() {
+            const selectedBackup = document.querySelector('input[name="backup"]:checked');
+            if (!selectedBackup) {
+                alert('请选择要恢复的备份文件');
+                return;
+            }
+
+            const restoreDrive = document.getElementById('restoreDrive').value;
+            const backupFilename = selectedBackup.value;
+
+            fetch('/api/restore', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ drive: restoreDrive, filename: backupFilename })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('恢复失败: ' + data.error);
+                } else {
+                    alert('恢复成功: ' + data.message + '\n恢复到的备份时间: ' + data.backup_datetime);
+                }
+            })
+            .catch(error => {
+                alert('恢复失败: ' + error);
+            });
+        }
+
+
+
+    </script>
+</body>
+
+</html>

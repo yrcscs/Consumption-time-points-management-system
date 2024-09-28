@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html class="loading" lang="en" data-textdirection="ltr">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">
+    <meta name="author" content="PIXINVENT">
+    <title>管理后台</title>
+
+    <style>
+        .error-message {
+            color: red;
+        }
+    </style>
+    
+    <script src="static/app-assets/js/jquery.js"></script>
+    <script src="static/app-assets/js/jquery.magnific-popup.js" type="text/javascript"></script>
+    <link rel="stylesheet" href="static/app-assets/css/login.css">
+    <link rel="stylesheet" href="static/app-assets/css/bootstrap.css">
+
+    <link href="static/app-assets/css/popup-box.css" rel="stylesheet" type="text/css" media="all" />
+    <script>
+
+        $(document).ready(function () {
+
+            $('.popup-with-zoom-anim').magnificPopup({
+
+                type: 'inline',
+                fixedContentPos: false,
+
+                fixedBgPos: true,
+
+                overflowY: 'auto',
+
+                closeBtnInside: true,
+
+                preloader: false,
+
+                midClick: true,
+
+                removalDelay: 300,
+
+                mainClass: 'my-mfp-zoom-in'
+
+            });
+
+
+
+        });
+
+    </script>
+</head>
+
+<body>
+
+    <section class="canvas-wrap">
+        <div id="canvas" class="gradient"></div>
+    </section>
+
+    <div style="position:absolute; z-index:100;">
+
+        <h1>管理后台</h1>
+        <div class="w3layouts">
+            <div class="signin-agile">
+                <form onsubmit="handleLogin(event)">
+                    <div class="error-message"></div>
+                    <input type="text" name="username" class="name" placeholder="用户名" required="">
+                    <input type="password" name="password" class="密码" placeholder="Password" required="">
+                    <ul>
+                        <li>
+                            <input type="checkbox" id="brand1" name="remember_me" value="">
+                            <label for="brand1"><span></span>记住我</label>
+                        </li>
+                    </ul>
+                    <div class="clear"></div>
+                    <input type="submit" value="登录">
+                </form>
+            </div>
+            <div class="signup-agileinfo">
+                <h3>用户注册</h3>
+                <p>Phasellus vel urna magna. Quisque molestie felis varius ex faucibus auctor. Aenean sit ame</p>
+                <div class="more"> <a class="book popup-with-zoom-anim button-isi zoomIn animated" data-wow-delay=".5s" href="#small-dialog">现在注册</a> </div>
+            </div>
+            <div class="clear"></div>
+        </div>
+        <div class="footer-w3l">
+            <p class="agileinfo">
+                &copy; 2016 Sign In And Sign Up Forms . All Rights Reserved | Design by <a href="https://www.bootstrapmb.com">bootstrapMB</a>
+            </p>
+        </div>
+
+    </div>
+
+
+
+    <div class="pop-up">
+        <div id="small-dialog" class="mfp-hide book-form">
+            <h3>注册信息</h3>
+            <form id="registerForm">
+                <input type="text" name="username" placeholder="名字" required="" />
+                <input type="password" name="password" class="password" placeholder="密码" required="" />
+                <input type="password" name="confirm_password" class="password" placeholder="确认密码" required="" />
+                <input type="submit" value="注册">
+            </form>
+        </div>
+    </div>
+
+    <script>
+        async function handleLogin(event) {
+            event.preventDefault(); // 阻止表单的默认提交行为
+
+            const username = document.querySelector('input[name="username"]').value;
+            const password = document.querySelector('input[name="password"]').value;
+            const rememberMe = document.querySelector('input[name="remember_me"]').checked;
+            const errorMessageDiv = document.querySelector('.error-message');
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password, remember_me: rememberMe })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    // 登录成功，重定向到仪表盘页面
+                    window.location.href = '/dashboard';
+                } else {
+                    // 显示错误信息
+                    errorMessageDiv.innerHTML = `<p>${data.message}</p>`;
+                }
+            } catch (error) {
+                errorMessageDiv.innerHTML = `<p>登录失败，请稍后再试。</p>`;
+            }
+        }
+    </script>
+    
+    <script>
+    document.getElementById('registerForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+    
+        const username = event.target.username.value;
+        const password = event.target.password.value;
+        const confirmPassword = event.target.confirm_password.value;
+    
+        if (password !== confirmPassword) {
+            alert('密码和确认密码不匹配');
+            return;
+        }
+    
+        fetch('/api/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username: username,
+                password: password
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                //alert(data.message);
+                if (data.message === 'User registered successfully') {
+                    // 关闭弹出窗口
+                    $.magnificPopup.close();
+                }
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    });
+    </script>
+    <script src="static/app-assets/bgjs/three.min.js"></script>
+    <script src="static/app-assets/bgjs/projector.js"></script>
+    <script src="static/app-assets/bgjs/canvas-renderer.js"></script>
+    <script src="static/app-assets/bgjs/3d-lines-animation.js"></script>
+    <script src="static/app-assets/bgjs/color.js"></script>
+
+</body>
+</html>
