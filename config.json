@@ -1,7 +1,8 @@
 {
-    "backupInterval": "1",
-    "backupTime": "16:17",
-    "backupDrive": "C",
-    "maxIntervalBackups": "3",
-    "maxTimeBackups": "1"
+    "backupInterval": "4",
+    "backupTime": "22:38",
+    "backupDrive": "",
+    "maxIntervalBackups": "5",
+    "maxTimeBackups": "5",
+    "customPath": null
 }

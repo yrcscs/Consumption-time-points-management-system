@@ -8,29 +8,30 @@ from apscheduler.schedulers.background import BackgroundScheduler
 scheduler = BackgroundScheduler()
 backup_bp = Blueprint('backup', __name__)
 
-def backup_database(drive, backup_type, max_backups=5):
+
+
+def backup_database(backup_dir, backup_type, max_backups=5):
     try:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_filename = f'backup_{timestamp}.sqlite'
-        backup_dir = os.path.join(f'{drive}:\\Backups', backup_type)
-        backup_path = os.path.join(backup_dir, backup_filename)
-        archive_dir = os.path.join(backup_dir, 'archive')
+        backup_path = os.path.join(backup_dir, backup_type, backup_filename)
+        archive_dir = os.path.join(backup_dir, backup_type, 'archive')
         db_path = 'lib/app/instance/app.db'
-        
+
         # 创建备份目录（如果不存在）
-        os.makedirs(backup_dir, exist_ok=True)
+        os.makedirs(os.path.join(backup_dir, backup_type), exist_ok=True)
         os.makedirs(archive_dir, exist_ok=True)
-        
+
         # 获取现有备份文件列表
         existing_backups = sorted(
-            [f for f in os.listdir(backup_dir) if f.startswith('backup_') and f.endswith('.sqlite')],
-            key=lambda x: os.path.getmtime(os.path.join(backup_dir, x))
+            [f for f in os.listdir(os.path.join(backup_dir, backup_type)) if f.startswith('backup_') and f.endswith('.sqlite')],
+            key=lambda x: os.path.getmtime(os.path.join(backup_dir, backup_type, x))
         )
 
         # 移动最旧的备份文件到归档文件夹以保持备份文件数量在 max_backups 以内
         while len(existing_backups) >= int(max_backups):
             oldest_backup = existing_backups.pop(0)
-            shutil.move(os.path.join(backup_dir, oldest_backup), os.path.join(archive_dir, oldest_backup))
+            shutil.move(os.path.join(backup_dir, backup_type, oldest_backup), os.path.join(archive_dir, oldest_backup))
         
         # 复制数据库文件
         with open(db_path, 'rb') as db_file:
@@ -47,15 +48,28 @@ def manual_backup():
     try:
         data = request.json
         drive = data.get('drive')
+        custom_path = data.get('customPath')
         interval = data.get('interval') # 单位分钟
-        backup_time = data.get('backup_time') # 定时备份时间，格式为 "HH:MM"
-        max_interval_backups = data.get('max_interval_backups', 5) # 默认最大间隔备份数量为 5
-        max_time_backups = data.get('max_time_backups', 5) # 默认最大定时备份数量为 5
+        backup_time = data.get('backupTime') # 定时备份时间，格式为 "HH:MM"
+        max_interval_backups = data.get('maxIntervalBackups', 5) # 默认最大间隔备份数量为 5
+        max_time_backups = data.get('maxTimeBackups', 5) # 默认最大定时备份数量为 5
 
-        if not drive:
-            return jsonify({'error': '未指定盘符'}), 400
+        if not drive and not custom_path:
+            return jsonify({'error': '未指定盘符或自定义路径'}), 400
         if not interval and not backup_time:
             return jsonify({'error': '未指定备份间隔或定时备份时间'}), 400
+
+        # 设置备份路径
+        if custom_path:
+            # 检查路径的有效性
+            if not os.path.exists(custom_path):
+                drive_letter = os.path.splitdrive(custom_path)[0]
+                if not os.path.exists(drive_letter):
+                    return jsonify({'error': f'盘符 {drive_letter} 不存在'}), 400
+                os.makedirs(custom_path, exist_ok=True)
+            backup_dir = custom_path
+        else:
+            backup_dir = os.path.join(f'{drive}:\\Backups')
 
         # 设置自动备份任务
         scheduler.remove_all_jobs()
@@ -63,19 +77,19 @@ def manual_backup():
         if backup_time:
             # 设置定时备份任务
             hour, minute = map(int, backup_time.split(':'))
-            scheduler.add_job(lambda: backup_database(drive, 'time', max_time_backups), 'cron', hour=hour, minute=minute)
+            scheduler.add_job(lambda: backup_database(backup_dir, 'time', max_time_backups), 'cron', hour=hour, minute=minute)
         if interval:
             # 设置间隔备份任务
-            scheduler.add_job(lambda: backup_database(drive, 'interval', max_interval_backups), 'interval', minutes=int(interval))
+            scheduler.add_job(lambda: backup_database(backup_dir, 'interval', max_interval_backups), 'interval', minutes=int(interval))
 
         if not scheduler.running:
             scheduler.start()
 
         # 立即进行一次备份
         if backup_time:
-            backup_filename = backup_database(drive, 'time', max_time_backups)
+            backup_filename = backup_database(backup_dir, 'time', max_time_backups)
         else:
-            backup_filename = backup_database(drive, 'interval', max_interval_backups)
+            backup_filename = backup_database(backup_dir, 'interval', max_interval_backups)
 
         return jsonify({'backup_filename': backup_filename}), 200
     except Exception as e:
@@ -134,17 +148,30 @@ def get_backup_settings():
 def save_backup_settings():
     data = request.json
     config = load_config()
-    
+
+    backup_drive = data.get('backupDrive', config.get('backupDrive'))
+    custom_path = data.get('customPath', config.get('customPath'))
+
+    if backup_drive == 'custom' and custom_path:
+        # 检查路径的合法性
+        drive_letter = custom_path.split(':')[0]
+        is_valid_path = re.match(r'^[a-zA-Z]:\\', custom_path) and re.match(r'^[a-zA-Z]$', drive_letter)
+        if not is_valid_path:
+            return jsonify({'error': '路径不合法，请检查格式'}), 400
+        config['customPath'] = custom_path
+        config['backupDrive'] = None  # 清除盘符设置
+    else:
+        config['backupDrive'] = backup_drive
+        config['customPath'] = None  # 清除自定义路径设置
+
     config['backupInterval'] = data.get('backupInterval', config.get('backupInterval'))
     config['backupTime'] = data.get('backupTime', config.get('backupTime'))
-    config['backupDrive'] = data.get('backupDrive', config.get('backupDrive'))
     config['maxIntervalBackups'] = data.get('maxIntervalBackups', config.get('maxIntervalBackups'))
     config['maxTimeBackups'] = data.get('maxTimeBackups', config.get('maxTimeBackups'))
 
     save_config(config)
-    
-    return jsonify({'success': True})
 
+    return jsonify({'success': True})
 
 
 
